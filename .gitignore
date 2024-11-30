@@ -1,0 +1,14 @@
+# Ignore specific files
+train-vpt_vit_b-baseline.sh
+train-vit_b-baseline.sh
+train_fair copy.py
+segmentation_metrics.xlsx
+segmentation_metrics_scaled.xlsx
+method_comparison.csv
+generated_controlled_data.xlsx
+
+# Ignore specific folders
+work_dir/
+wandb/
+logs/
+HarvardFairSeg/
