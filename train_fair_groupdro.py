@@ -30,6 +30,7 @@ import glob
 from build_medsam import MedSAM, FairMedSAM, Predictor, ShannonEntropy
 from ddp_utils import init_distributed_mode, gather_object_across_processes
 from load_data import show_mask, show_box, NpzTrainSet, NpzTestSet
+from collections import defaultdict
 
 # set seeds
 torch.manual_seed(2023)
@@ -44,7 +45,7 @@ for step, data in enumerate(tr_dataloader):
     gt = data['label']
     bboxes = data['bboxes']
     names_temp = data['img_name']
-    # print(image.shape, gt.shape, bboxes.shape)
+    print(image.shape, gt.shape, bboxes.shape)
     # show the example
     _, axs = plt.subplots(1, 2, figsize=(25, 25))
     idx = random.randint(0, 7)
@@ -109,8 +110,7 @@ def parse_args():
 def main(args):
     args = parse_args()
     init_distributed_mode(args)
-    linear_layer = nn.Linear(768, args.num_sensitive_classes).cuda()
-    vpt_linear_layer = nn.Linear(768, args.num_sensitive_classes).cuda()
+
     if args.use_wandb:
         import wandb
 
@@ -267,6 +267,8 @@ def main(args):
         epoch_sam_loss = 0
         epoch_img_pred_loss = 0
         epoch_vpt_pred_loss = 0
+        group_losses = defaultdict(list)  # 用于存储每个分组的损失
+        group_weights = {}  # 用于存储每个分组的权重
         train_dataloader.sampler.set_epoch(epoch)
         tbar = tqdm(range(len(train_dataloader)))
         train_iter = iter(train_dataloader)
@@ -285,23 +287,8 @@ def main(args):
                 with torch.autocast(device_type="cuda", dtype=torch.float16):
                     medsam_pred, img_pred, vpt_pred = medsam_model(image, boxes_np)
                     sam_loss = seg_loss(medsam_pred, gt2D) + ce_loss(medsam_pred, gt2D.float())
-                    # print(f"img_pred shape: {img_pred.shape}")
-                    # print(f"sensitive_cls: {sensitive_cls}")
-                    # 对 4096 个 patch 的特征取平均，得到全局特征
-                    global_img_pred = img_pred.mean(dim=1)  # shape: [batch_size, 768]
-                    # 添加一个线性映射层，将特征维度 768 映射到类别数
-                    # linear_layer = nn.Linear(768, args.num_sensitive_classes).cuda()
-                    global_img_pred_class = linear_layer(global_img_pred)  # shape: [batch_size, num_classes]
-                    # print(f"global_img_pred_class: {global_img_pred_class.shape}")
-
-                    # 对 5 个 visual prompts 取平均
-                    global_vpt_pred = vpt_pred.mean(dim=1)  # shape: [batch_size, 768]
-                    # 添加一个线性层映射到类别数
-                    # vpt_linear_layer = nn.Linear(768, args.num_sensitive_classes).cuda()
-                    global_vpt_pred_class = vpt_linear_layer(global_vpt_pred)  # shape: [batch_size, num_classes]
-                    # print(f"global_vpt_pred_class: {global_vpt_pred_class.shape}")
-                    img_pred_loss = - ce_loss_sensitive(global_img_pred_class, sensitive_cls) - args.beta * entropy(img_pred)
-                    vpt_pred_loss = ce_loss_sensitive(global_vpt_pred_class, sensitive_cls)
+                    img_pred_loss = - ce_loss_sensitive(img_pred, sensitive_cls) - args.beta * entropy(img_pred)
+                    vpt_pred_loss = ce_loss_sensitive(vpt_pred, sensitive_cls)
                     loss = sam_loss + args.alpha * img_pred_loss + args.alpha * vpt_pred_loss
                 scaler.scale(loss).backward()
                 scaler.step(optimizer)
@@ -312,7 +299,22 @@ def main(args):
                 sam_loss = seg_loss(medsam_pred, gt2D) + ce_loss(medsam_pred, gt2D.float())
                 img_pred_loss = - ce_loss_sensitive(img_pred, sensitive_cls) - args.beta * entropy(img_pred)
                 vpt_pred_loss = ce_loss_sensitive(vpt_pred, sensitive_cls)
-                loss = sam_loss + args.alpha * img_pred_loss + args.alpha * vpt_pred_loss
+                # 计算分组损失
+                unique_groups = torch.unique(sensitive_cls)  # 获取所有分组
+                group_loss_values = []  # 存储每个分组的损失
+                for group_id in unique_groups:
+                    group_mask = (sensitive_cls == group_id)  # 找到属于该分组的样本
+                    if group_mask.sum() > 0:  # 确保分组中有样本
+                        print(group_mask.sum())
+                        group_sam_loss = seg_loss(medsam_pred[group_mask], gt2D[group_mask])
+                        group_loss_values.append(group_sam_loss)
+                        group_losses[group_id.item()].append(group_sam_loss.item())
+                
+                # 动态调整分组权重
+                group_loss_tensor = torch.stack(group_loss_values)
+                group_weights_tensor = torch.softmax(group_loss_tensor * args.alpha, dim=0)
+
+                loss = sam_loss + args.alpha * img_pred_loss + args.alpha * vpt_pred_loss + torch.sum(group_weights_tensor * group_loss_tensor)
                 loss.backward()
                 optimizer.step()
             
@@ -344,6 +346,12 @@ def main(args):
         report = f'Time: {datetime.now().strftime("%Y%m%d-%H%M")}, Epoch: {epoch}, Seg Loss: {running_sam_loss:.6f}, Pred Loss G: {running_pred_loss_g:.6f}, Pred Loss D: {running_pred_loss_d:.6f}'
         print(report)
         # save the model checkpoint
+        # 记录每个 epoch 的分组损失和权重
+        if dist.get_rank() == 0:
+            print("Group Losses and Weights:")
+            for group_id, losses in group_losses.items():
+                print(f"Group {group_id}: Avg Loss = {sum(losses) / len(losses):.6f}")
+                
         if dist.get_rank() == 0:
             checkpoint = {
                 "model": medsam_model.state_dict(),

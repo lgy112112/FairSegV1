@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 import os
 import pandas as pd
 import cv2
+import torchvision.transforms as transforms
+import PIL.Image as Image
 
 join = os.path.join
 from tqdm import tqdm
@@ -45,8 +47,8 @@ def parse_args():
     parser.add_argument("--work_dir", type=str, default="./work_dir")
     parser.add_argument("--checkpoint", type=str, default="work_dir/MedSAM/medsam_vit_b.pth")
     # val
-    parser.add_argument("--batch_size", type=int, default=8)
-    parser.add_argument("--num_workers", type=int, default=8)
+    parser.add_argument("--batch_size", type=int, default=2)
+    parser.add_argument("--num_workers", type=int, default=16)
     args = parser.parse_args()
     return args
 
@@ -56,8 +58,8 @@ def main(args):
     if args.savedir is not None:
         # remove "module." from the checkpoint
         model_save_path = join(args.work_dir, args.savedir)
-        ckpt_path = join(model_save_path, 'medsam_model_latest.pth')
-        save_path = join(model_save_path, 'medsam_model_latest_fixed.pth')
+        ckpt_path = join(model_save_path, 'medsam_model_best.pth')
+        save_path = join(model_save_path, 'medsam_model_latest_epoch_fixed.pth')
 
         # fix the checkpoint
         original_ckpt = torch.load(ckpt_path, map_location='cpu')['model']
@@ -94,6 +96,11 @@ def main(args):
     tbar = tqdm(range(len(test_dataloader)))
     test_iter = iter(test_dataloader)
     metric_list = []
+
+    # 创建保存目录
+    output_dir = join(model_save_path, 'predictions')
+    os.makedirs(output_dir, exist_ok=True)
+
     for step in tbar:
         data = next(test_iter)
         image = data['image']
@@ -105,6 +112,7 @@ def main(args):
         cup_boxes_np = cup_bboxes.detach().cpu().numpy()
         disc_boxes_np = disc_bboxes.detach().cpu().numpy()
         image = image.cuda()
+
         with torch.no_grad(), torch.amp.autocast('cuda'):
             cup_pred = (torch.sigmoid(medsam_model(image, cup_boxes_np)) >= 0.5).to(torch.float32).cpu()
             disc_pred = (torch.sigmoid(medsam_model(image, disc_boxes_np)) >= 0.5).to(torch.float32).cpu()
@@ -113,6 +121,7 @@ def main(args):
             rim_dice = dice_metric(rim_pred, gt_rim)
             cup_iou = iou_metric(cup_pred, gt_cup)
             rim_iou = iou_metric(rim_pred, gt_rim)
+
             for idx in range(args.batch_size):
                 name = data['img_name'][idx]
                 cup_dice_val = cup_dice[idx].item()
@@ -120,13 +129,29 @@ def main(args):
                 cup_iou_val = cup_iou[idx].item()
                 rim_iou_val = rim_iou[idx].item()
                 metric_list.append({'name': name, 'cup_dice': cup_dice_val, 'rim_dice': rim_dice_val, 'cup_iou': cup_iou_val, 'rim_iou': rim_iou_val})
-    # save the metric results
+
+                # 保存原图
+                orig_image = transforms.ToPILImage()(image[idx].cpu())
+                orig_image.save(join(output_dir, f"{name}_image.png"))
+
+                # 保存真实掩码
+                gt_cup_img = transforms.ToPILImage()(gt_cup[idx].to(torch.uint8) * 255)
+                gt_disc_img = transforms.ToPILImage()(gt_disc[idx].to(torch.uint8) * 255)
+                gt_cup_img.save(join(output_dir, f"{name}_gt_cup.png"))
+                gt_disc_img.save(join(output_dir, f"{name}_gt_disc.png"))
+
+                # 保存预测结果
+                cup_pred_img = transforms.ToPILImage()(cup_pred[idx])
+                disc_pred_img = transforms.ToPILImage()(disc_pred[idx])
+                cup_pred_img.save(join(output_dir, f"{name}_pred_cup.png"))
+                disc_pred_img.save(join(output_dir, f"{name}_pred_disc.png"))
+
+    # 保存评估指标
     metric_df = pd.DataFrame(metric_list)
     metric_df.to_csv(join(model_save_path, 'metric.csv'), index=False)
 
-    
+# python evaluate.py --savedir fair-vit_vpt_b-1gpus-att_name0-num_att3-epochs0-20241124-0521 --model_type vpt_vit_b
 
-            
 if __name__ == "__main__":
     args = parse_args()
     main(args)

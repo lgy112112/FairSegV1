@@ -51,7 +51,7 @@ def build_sam_vit_b(checkpoint=None):
     )
 
 
-def build_vpt_sam_vit_b(checkpoint=None, return_vpt=False):
+def build_vpt_sam_vit_b(checkpoint=None, return_vpt=True):
     return _build_sam(
         encoder_embed_dim=768,
         encoder_depth=12,

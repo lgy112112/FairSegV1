@@ -149,7 +149,7 @@ class ImageEncoderViT(nn.Module):
         x = x[:, self.num_vpt_tokens:, :].view(B, H, W, C)
 
         out = self.neck(x.permute(0, 3, 1, 2))
-        # print(f"out in image_encoder shape: {out}")
+        print(f"out in image_encoder shape: {out}")
         if self.return_visual_prompts:  # triplet output: feature map (after neck), image tokens, visual prompts
             return out, x.view(B, H * W, C), visual_prompts
         return out

@@ -125,6 +125,8 @@ class FairMedSAM(nn.Module):
         self.image_encoder = image_encoder
         self.mask_decoder = mask_decoder
         self.prompt_encoder = prompt_encoder
+        self.linear_layer = nn.Linear(768, num_sensitive_classes)
+        self.vpt_linear_layer = nn.Linear(768, num_sensitive_classes)
         # freeze prompt encoder
         for param in self.prompt_encoder.parameters():
             param.requires_grad = False
@@ -132,13 +134,17 @@ class FairMedSAM(nn.Module):
         # # sensitive attribute predictor
         # self.sensitive_predictor = Predictor(num_classes=num_sensitive_classes)
 
-    def forward(self, image, box, training_mode=False):
+    def forward(self, image, box, training_mode=True):
         # generate embeddings from encoder
         # result = self.image_encoder(image)  # 打印实际返回值
-        # print(len(result)) # len = 4
+        # print(len(result))
         # print("image_encoder output:", type(result), result)
 
-        feature_map, image_tokens, visual_prompts, _ = self.image_encoder(image)  # (B, 256, 64, 64), (B, N, 768), (B, num_tokens, 768)
+        # feature_map, image_tokens, visual_prompts, _ = self.image_encoder(image)  # (B, 256, 64, 64), (B, N, 768), (B, num_tokens, 768)
+        feature_map, image_tokens, visual_prompts = self.image_encoder(image)
+        # print("feature_map:", feature_map.shape)
+        # print("image_tokens:", image_tokens.shape)
+        # print("visual_prompts:", visual_prompts.shape)
         
         # 1. run the segmentation
         with torch.no_grad():
