@@ -42,8 +42,8 @@ torch.cuda.empty_cache()
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--val_npy_path", type=str, default="HarvardFairSeg/Test", help="path to testing FairSeg dataset")
-    parser.add_argument("--savedir", type=str, default=None, help="directory to saved models")
-    parser.add_argument("--model_type", type=str, default="vit_b")
+    parser.add_argument("--savedir", type=str, default="GroupDRO-20241218-0738", help="directory to saved models")
+    parser.add_argument("--model_type", type=str, default="vpt_vit_b")
     parser.add_argument("--work_dir", type=str, default="./work_dir")
     parser.add_argument("--checkpoint", type=str, default="work_dir/MedSAM/medsam_vit_b.pth")
     # val
@@ -51,7 +51,6 @@ def parse_args():
     parser.add_argument("--num_workers", type=int, default=16)
     args = parser.parse_args()
     return args
-
 
 def main(args):
     args = parse_args()
@@ -71,6 +70,7 @@ def main(args):
 
         # build the SAM model
         sam_model = sam_model_registry[args.model_type](checkpoint=save_path)
+        print(f"Loaded model from {save_path}")
     else:
         model_save_path = join(args.work_dir, 'MedSAM')
         sam_model = sam_model_registry[args.model_type](checkpoint=args.checkpoint)

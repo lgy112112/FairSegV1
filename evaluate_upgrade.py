@@ -27,7 +27,7 @@ import random
 from datetime import datetime
 import shutil
 import glob
-from build_medsam import MedSAM
+from build_medsam import FairMedSAM as MedSAM
 from ddp_utils import init_distributed_mode
 from load_data import show_mask, show_box, NpzTestSet
 
@@ -42,15 +42,14 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--val_npy_path", type=str, default="HarvardFairSeg/Test", help="path to testing FairSeg dataset")
     parser.add_argument("--savedir", type=str, default=None, help="directory to saved models")
-    parser.add_argument("--model_type", type=str, default="vit_b")
+    parser.add_argument("--model_type", type=str, default="vpt_vit_b")
     parser.add_argument("--work_dir", type=str, default="./work_dir")
-    parser.add_argument("--checkpoint", type=str, default="work_dir/MedSAM/medsam_vit_b.pth")
+    parser.add_argument("--checkpoint", type=str, default="/teamspace/studios/this_studio/FairSegV1/work_dir/GroupDRO-20241218-0738/medsam_model_best.pth")
     # val
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--num_workers", type=int, default=8)
     args = parser.parse_args()
     return args
-
 
 def main(args):
     args = parse_args()
@@ -132,7 +131,7 @@ def main(args):
 
     # 保存评估结果
     metric_df = pd.DataFrame(metric_list)
-    metric_df.to_csv(join(args.work_dir, f'vit_metric.csv'), index=False)
+    metric_df.to_csv(join(args.work_dir, f'dro_metric.csv'), index=False)
 
 
     

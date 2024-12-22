@@ -9,20 +9,20 @@ echo "Using $num_device CUDA devices for training"
 att_name='race'
 # specify number of senstive classes
 num_att=3
-num_epochs=3
-exp_name="TEST3"
+num_epochs=5
+exp_name="TEST"
 echo "Experiment name: $exp_name"
 
 CUDA_VISIBLE_DEVICES=$cuda_devices torchrun --nproc_per_node=$num_device \
---rdzv_backend=c10d --rdzv_endpoint=localhost:0 --nnodes=1 train_fair_adv.py \
+--rdzv_backend=c10d --rdzv_endpoint=localhost:0 --nnodes=1 train_dro.py \
 --task_name $exp_name \
 --attribute_name $att_name \
 --num_sensitive_classes $num_att \
 --num_epochs $num_epochs \
---model_type "vpt_vit_b" \
+--model_type "vit_b" \
 --work_dir ./work_dir \
---checkpoint ./work_dir/medsam-vit_b-1gpus-20241121-1557/medsam_model_latest_epoch_fixed.pth \
---batch_size 1 \
+--checkpoint ./work_dir/SAM/sam_vit_b_01ec64.pth \
+--batch_size 2 \
 --num_workers 16 \
 --bucket_cap_mb 25 \
 --finetune_head \

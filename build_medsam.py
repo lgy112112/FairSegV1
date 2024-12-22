@@ -20,6 +20,7 @@ class MedSAM(nn.Module):
 
     def forward(self, image, box):
         image_embedding = self.image_encoder(image)  # (B, 256, 64, 64)
+        print("image_embedding:", type(image_embedding))
         # do not compute gradients for prompt encoder
         with torch.no_grad():
             box_torch = torch.as_tensor(box, dtype=torch.float32, device=image.device)
@@ -142,6 +143,7 @@ class FairMedSAM(nn.Module):
 
         # feature_map, image_tokens, visual_prompts, _ = self.image_encoder(image)  # (B, 256, 64, 64), (B, N, 768), (B, num_tokens, 768)
         feature_map, image_tokens, visual_prompts = self.image_encoder(image)
+        # feature_map = self.image_encoder(image)
         # print("feature_map:", feature_map.shape)
         # print("image_tokens:", image_tokens.shape)
         # print("visual_prompts:", visual_prompts.shape)
