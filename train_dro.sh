@@ -20,10 +20,10 @@ CUDA_VISIBLE_DEVICES=$cuda_devices torchrun --nproc_per_node=$num_device \
 --attribute_name $att_name \
 --num_sensitive_classes $num_att \
 --num_epochs $num_epochs \
---model_type "vit_b" \
+--model_type "vpt_vit_b" \
 --work_dir ./work_dir \
 --checkpoint ./work_dir/SAM/sam_vit_b_01ec64.pth \
---batch_size 2 \
+--batch_size 1 \
 --num_workers 16 \
 --bucket_cap_mb 25 \
 --finetune_head \

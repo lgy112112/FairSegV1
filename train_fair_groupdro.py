@@ -107,14 +107,17 @@ def parse_args():
     return args
 
 class LossComputer:
-    def __init__(self, num_groups, is_robust, step_size, alpha):
+    def __init__(self, num_groups, is_robust, step_size, alpha, device='cuda'):
         self.num_groups = num_groups  # 组的数量
         self.is_robust = is_robust  # 是否启用Group DRO
         self.step_size = step_size  # 动态调整的步长
         self.alpha = alpha  # 调整参数
-        self.adv_probs = torch.ones(num_groups) / num_groups  # 初始化每个组的权重（均匀分布）
+        self.device = device  # 设备
+        self.adv_probs = torch.ones(num_groups, device=device) / num_groups  # 初始化每个组的权重（均匀分布）
 
     def compute_group_loss(self, group_losses):
+        # 确保adv_probs在与group_losses相同的设备上
+        self.adv_probs = self.adv_probs.to(group_losses.device)
         # 调整每个组的损失
         adjusted_losses = group_losses + self.alpha * torch.log(self.adv_probs)
         # 计算最终的损失（加权求和）
@@ -158,7 +161,6 @@ def main(args):
         prompt_encoder=sam_model.prompt_encoder,
         num_sensitive_classes=args.num_sensitive_classes,
     ).cuda().train()
-
     # setting up trainable parameters
     # let's first freeze all the parameters in SAM
     for param in sam_model.parameters():
@@ -286,7 +288,8 @@ def main(args):
         num_groups=args.num_sensitive_classes,  # 敏感类别的数量
         is_robust=True,  # 启用Group DRO
         step_size=args.step_size,  # 动态调整的步长
-        alpha=args.alpha  # 调整参数
+        alpha=args.alpha,  # 调整参数
+        device='cuda',  # 设备
     )
 
     for epoch in range(start_epoch, num_epochs):
@@ -317,7 +320,7 @@ def main(args):
                     for group_id in range(args.num_sensitive_classes):
                         group_mask = (sensitive_cls == group_id)  # 当前组的掩码
                         if not group_mask.any():
-                            group_loss = torch.tensor(0.0, device=image.device)
+                            group_sam_loss = torch.tensor(0.0, device=image.device)
                         else:
                             group_medsam_pred = medsam_pred[group_mask]
                             group_gt2D = gt2D[group_mask]
