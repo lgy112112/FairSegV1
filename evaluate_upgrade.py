@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 import os
 import pandas as pd
 import cv2
+import torchvision.transforms as transforms
+import PIL.Image as Image
 
 join = os.path.join
 from tqdm import tqdm
@@ -48,6 +50,7 @@ def parse_args():
     # val
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--num_workers", type=int, default=8)
+    parser.add_argument("--output_csv_path", type=str, default=None)
     args = parser.parse_args()
     return args
 
@@ -91,6 +94,11 @@ def main(args):
     dice_metric = monai.metrics.DiceMetric(include_background=False, reduction="none")
     iou_metric = monai.metrics.MeanIoU(include_background=False, reduction="none")
 
+    # 创建保存目录
+    model_save_path = os.path.dirname(args.checkpoint)
+    output_dir = join(model_save_path, 'predictions')
+    os.makedirs(output_dir, exist_ok=True)
+
     # 开始评估
     tbar = tqdm(range(len(test_dataloader)))
     test_iter = iter(test_dataloader)
@@ -108,30 +116,54 @@ def main(args):
 
         # 使用 MedSAM 模型预测
         with torch.no_grad(), torch.amp.autocast('cuda'):
-            cup_pred = (torch.sigmoid(medsam_model(image, cup_boxes_np)) >= 0.5).to(torch.float32).cpu()
-            disc_pred = (torch.sigmoid(medsam_model(image, disc_boxes_np)) >= 0.5).to(torch.float32).cpu()
-            rim_pred = torch.where(disc_pred - cup_pred > 0, 1, 0)
+            # print(f"\n\ncheck type: {type(image)}, {type(cup_boxes_np)}")
+            cup_pred = (torch.sigmoid(medsam_model(image, cup_boxes_np, training_mode=False)) >= 0.5).to(torch.float32).cpu()
+            disc_pred = (torch.sigmoid(medsam_model(image, disc_boxes_np, training_mode=False)) >= 0.5).to(torch.float32).cpu()
+            rim_pred = torch.where(disc_pred - cup_pred > 0, 1, 0).to(torch.float32)
 
-        # 计算 Dice 和 IoU
-        cup_dice = dice_metric(cup_pred, gt_cup)
-        rim_dice = dice_metric(rim_pred, gt_rim)
-        cup_iou = iou_metric(cup_pred, gt_cup)
-        rim_iou = iou_metric(rim_pred, gt_rim)
+            # 计算 Dice 和 IoU
+            cup_dice = dice_metric(cup_pred, gt_cup)
+            rim_dice = dice_metric(rim_pred, gt_rim)
+            cup_iou = iou_metric(cup_pred, gt_cup)
+            rim_iou = iou_metric(rim_pred, gt_rim)
 
-        # 保存每个样本的结果
-        for idx in range(args.batch_size):
-            name = data['img_name'][idx]
-            metric_list.append({
-                'name': name,
-                'cup_dice': cup_dice[idx].item(),
-                'rim_dice': rim_dice[idx].item(),
-                'cup_iou': cup_iou[idx].item(),
-                'rim_iou': rim_iou[idx].item()
-            })
+            # 保存每个样本的结果
+            for idx in range(len(data['img_name'])):  # 使用实际的批次大小
+                name = data['img_name'][idx]
+                metric_list.append({
+                    'name': name,
+                    'cup_dice': cup_dice[idx].item(),
+                    'rim_dice': rim_dice[idx].item(),
+                    'cup_iou': cup_iou[idx].item(),
+                    'rim_iou': rim_iou[idx].item()
+                })
+
+                # 保存原图
+                orig_image = transforms.ToPILImage()(image[idx].cpu())
+                orig_image.save(join(output_dir, f"{name}_image.png"))
+
+                # 保存真实掩码
+                gt_cup_img = transforms.ToPILImage()(gt_cup[idx].to(torch.uint8) * 255)
+                gt_disc_img = transforms.ToPILImage()(gt_disc[idx].to(torch.uint8) * 255)
+                gt_rim_img = transforms.ToPILImage()(gt_rim[idx].to(torch.uint8) * 255)
+                gt_cup_img.save(join(output_dir, f"{name}_gt_cup.png"))
+                gt_disc_img.save(join(output_dir, f"{name}_gt_disc.png"))
+                gt_rim_img.save(join(output_dir, f"{name}_gt_rim.png"))
+
+                # 保存预测结果
+                cup_pred_img = transforms.ToPILImage()(cup_pred[idx])
+                disc_pred_img = transforms.ToPILImage()(disc_pred[idx])
+                rim_pred_img = transforms.ToPILImage()(rim_pred[idx])
+                cup_pred_img.save(join(output_dir, f"{name}_pred_cup.png"))
+                disc_pred_img.save(join(output_dir, f"{name}_pred_disc.png"))
+                rim_pred_img.save(join(output_dir, f"{name}_pred_rim.png"))
 
     # 保存评估结果
     metric_df = pd.DataFrame(metric_list)
-    metric_df.to_csv(join(args.work_dir, f'dro_metric.csv'), index=False)
+    if args.output_csv_path:
+        metric_df.to_csv(args.output_csv_path, index=False)
+    else:
+        metric_df.to_csv(join(model_save_path, 'metric.csv'), index=False)
 
 
     

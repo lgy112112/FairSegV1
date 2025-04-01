@@ -116,7 +116,7 @@ def main(args):
         with torch.no_grad(), torch.amp.autocast('cuda'):
             cup_pred = (torch.sigmoid(medsam_model(image, cup_boxes_np)) >= 0.5).to(torch.float32).cpu()
             disc_pred = (torch.sigmoid(medsam_model(image, disc_boxes_np)) >= 0.5).to(torch.float32).cpu()
-            rim_pred = torch.where(disc_pred - cup_pred > 0, 1, 0)
+            rim_pred = torch.where(disc_pred - cup_pred > 0, 1, 0).to(torch.float32)
             cup_dice = dice_metric(cup_pred, gt_cup)
             rim_dice = dice_metric(rim_pred, gt_rim)
             cup_iou = iou_metric(cup_pred, gt_cup)
@@ -137,21 +137,26 @@ def main(args):
                 # 保存真实掩码
                 gt_cup_img = transforms.ToPILImage()(gt_cup[idx].to(torch.uint8) * 255)
                 gt_disc_img = transforms.ToPILImage()(gt_disc[idx].to(torch.uint8) * 255)
+                gt_rim_img = transforms.ToPILImage()(gt_rim[idx].to(torch.uint8) * 255)
                 gt_cup_img.save(join(output_dir, f"{name}_gt_cup.png"))
                 gt_disc_img.save(join(output_dir, f"{name}_gt_disc.png"))
+                gt_rim_img.save(join(output_dir, f"{name}_gt_rim.png"))
 
                 # 保存预测结果
                 cup_pred_img = transforms.ToPILImage()(cup_pred[idx])
                 disc_pred_img = transforms.ToPILImage()(disc_pred[idx])
+                rim_pred_img = transforms.ToPILImage()(rim_pred[idx].to(torch.float32))
                 cup_pred_img.save(join(output_dir, f"{name}_pred_cup.png"))
                 disc_pred_img.save(join(output_dir, f"{name}_pred_disc.png"))
+                rim_pred_img.save(join(output_dir, f"{name}_pred_rim.png"))
 
     # 保存评估指标
     metric_df = pd.DataFrame(metric_list)
     metric_df.to_csv(join(model_save_path, 'metric.csv'), index=False)
 
-# python evaluate.py --savedir fair-vit_vpt_b-1gpus-att_name0-num_att3-epochs0-20241124-0521 --model_type vpt_vit_b
+# python evaluate.py --savedir medsam-vpt_vit_b-1gpus-2 --model_type vpt_vit_b
 
 if __name__ == "__main__":
     args = parse_args()
     main(args)
+

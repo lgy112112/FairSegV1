@@ -19,8 +19,15 @@ class MedSAM(nn.Module):
             param.requires_grad = False
 
     def forward(self, image, box):
-        image_embedding = self.image_encoder(image)  # (B, 256, 64, 64)
-        print("image_embedding:", type(image_embedding))
+        encoder_output = self.image_encoder(image)  # (B, 256, 64, 64) or tuple
+        # print("image_embedding:", type(encoder_output)) # Debug print can be removed later
+
+        # Check if the output is a tuple and extract the feature map (first element)
+        if isinstance(encoder_output, tuple):
+            image_embedding = encoder_output[0] # Extract the feature map
+        else:
+            image_embedding = encoder_output # Use the output directly if not a tuple
+
         # do not compute gradients for prompt encoder
         with torch.no_grad():
             box_torch = torch.as_tensor(box, dtype=torch.float32, device=image.device)
@@ -179,6 +186,7 @@ class FairMedSAM(nn.Module):
 
         # return ori_res_masks, img_pred, vpt_pred if training_mode else ori_res_masks
         if training_mode:
+            print("training mode")
             return ori_res_masks, image_tokens, visual_prompts
         return ori_res_masks
 

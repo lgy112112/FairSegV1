@@ -6,6 +6,13 @@ segmentation_metrics.xlsx
 segmentation_metrics_scaled.xlsx
 method_comparison.csv
 generated_controlled_data.xlsx
+.gitignore
+visualizations/
+demo_check_diff.ipynb
+demo.ipynb
+*.csv
+*.xlsx
+*.zip
 
 # Ignore specific folders
 work_dir/

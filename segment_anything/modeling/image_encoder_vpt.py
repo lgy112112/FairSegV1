@@ -404,6 +404,8 @@ class PromptedAttention(nn.Module):
             attn_mask = torch.zeros(H * W + num_tokens, H * W + num_tokens, device=attn.device)
             attn_mask[num_tokens:, :num_tokens] = -100.0
             attn = attn + attn_mask
+            # attn = attn # 2 no mask
+            # print(f"attn no mask")
 
         attn = attn.softmax(dim=-1)
         # x = (

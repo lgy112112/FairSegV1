@@ -328,7 +328,10 @@ def main(args):
                     img_pred, img_cls = pred_model(image_embed, True)
                     vpt_pred, vpt_cls = pred_model(vpt_embed, True)
                     sam_loss = seg_loss(medsam_pred, gt2D) + ce_loss(medsam_pred, gt2D.float())
-                    img_pred_loss = - ce_loss_sensitive(img_pred, sensitive_cls) - args.beta * entropy(img_pred) + args.beta * contrastive_loss(img_cls, vpt_cls)
+                    img_pred_loss = - ce_loss_sensitive(img_pred, sensitive_cls) - args.beta * entropy(img_pred) + args.beta * contrastive_loss(img_cls, vpt_cls) # 123
+                    # img_pred_loss = - ce_loss_sensitive(img_pred, sensitive_cls) - 0 * entropy(img_pred) + args.beta * contrastive_loss(img_cls, vpt_cls) # 12
+                    # img_pred_loss = - ce_loss_sensitive(img_pred, sensitive_cls) - 0 * entropy(img_pred) + 0 * contrastive_loss(img_cls, vpt_cls) # 1
+                    
                     loss = sam_loss + args.alpha * img_pred_loss
                 scaler.scale(loss).backward()
                 scaler.step(seg_optimizer)

@@ -1,127 +1,81 @@
-# MedSAM
-This is the official repository for MedSAM: Segment Anything in Medical Images.
+# FairSegV1
 
-Welcome to join our [mailing list](https://forms.gle/hk4Efp6uWnhjUHFP6) to get updates.
+FairSegV1 is a fairness-focused image segmentation framework based on SAM (Segment Anything Model), designed to reduce bias in model predictions. By incorporating sensitive attribute prediction and fairness constraints, the project enhances model fairness while maintaining segmentation performance.
 
+## Key Features
 
-## News
+- Built on SAM model, supporting various ViT architectures
+- Extensible fairness constraint module
+- Supports distributed training
+- Provides complete training and evaluation pipelines
+- Visualization tools included
 
-- 2024.08.06: Med[SAM2](https://github.com/facebookresearch/segment-anything-2)-Segment Anything in Medical Images and Videos: Benchmark and Deployment [[`Paper`](https://arxiv.org/abs/2408.03322)] [[`Code`](https://github.com/bowang-lab/MedSAM/tree/MedSAM2)] [[Online Demo](https://huggingface.co/spaces/junma/MedSAM2)] [[`Gradio API`](https://github.com/bowang-lab/MedSAM/blob/MedSAM2/app.py)] [[`3D Slicer Plugin`](https://github.com/bowang-lab/MedSAMSlicer/tree/SAM2)] [[Fine-tune SAM2](https://github.com/bowang-lab/MedSAM/tree/MedSAM2?tab=readme-ov-file#fine-tune-sam2-on-the-abdomen-ct-dataset)]
-- 2024.01.15: Welcome to join [CVPR 2024 Challenge: MedSAM on Laptop](https://www.codabench.org/competitions/1847/)
-- 2024.01.15: Release [LiteMedSAM](https://github.com/bowang-lab/MedSAM/blob/LiteMedSAM/README.md) and [3D Slicer Plugin](https://github.com/bowang-lab/MedSAMSlicer), 10x faster than MedSAM! 
+## Model Architecture
 
+The core of FairSegV1 is the FairMedSAM model, which consists of the following components:
+
+1. **Image Encoder**: Based on ViT architecture, extracts image features
+2. **Prompt Encoder**: Processes input prompts (e.g., bounding boxes)
+3. **Mask Decoder**: Generates segmentation masks
+4. **Sensitive Attribute Predictor**: Predicts sensitive attributes for fairness constraints
 
 ## Installation
-1. Create a virtual environment `conda create -n medsam python=3.10 -y` and activate it `conda activate medsam`
-2. Install [Pytorch 2.0](https://pytorch.org/get-started/locally/)
-3. `git clone https://github.com/bowang-lab/MedSAM`
-4. Enter the MedSAM folder `cd MedSAM` and run `pip install -e .`
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/your-repo/FairSegV1.git
+   cd FairSegV1
+   ```
+
+2. Install dependencies:
+   ```bash
+   python setup.py -e .
+   ```
 
 
-## Get Started
-Download the [model checkpoint](https://drive.google.com/drive/folders/1ETWmi4AiniJeWOt6HAsYgTjYv_fkgzoN?usp=drive_link) and place it at e.g., `work_dir/MedSAM/medsam_vit_b`
+## Usage Instructions
 
-We provide three ways to quickly test the model on your images
+### Training
 
-1. Command line
+1. Prepare the dataset, ensuring the directory structure is as follows:
+   ```
+   HarvardFairSeg/
+     ├── Training/
+     └── Test/
+   ```
 
-```bash
-python MedSAM_Inference.py # segment the demo image
-```
+2. Modify parameters in the training script `train.sh` or `train_fair.sh`:
+   - `cuda_devices`: Specify GPUs to use
+   - `att_name`: Sensitive attribute name
+   - `num_att`: Number of sensitive attribute categories
+   - `exp_name`: Experiment name
+   - `model_type`: `vit_b`, `vpt_vit_b`
 
-Segment other images with the following flags
-```bash
--i input_img
--o output path
---box bounding box of the segmentation target
-```
+3. Start training:
+   ```bash
+   bash train.sh
+   ```
 
-2. Jupyter-notebook
+### Evaluation
 
-We provide a step-by-step tutorial on [CoLab](https://colab.research.google.com/drive/19WNtRMbpsxeqimBlmJwtd1dzpaIvK2FZ?usp=sharing)
+After training, the model will automatically evaluate on the test set, with results saved in the `logs/` directory.
 
-You can also run it locally with `tutorial_quickstart.ipynb`.
+## Parameter Description
 
-3. GUI
+| Parameter | Description |
+|-----------|-------------|
+| `--tr_npy_path` | Path to training data |
+| `--val_npy_path` | Path to validation data |
+| `--task_name` | Task name |
+| `--model_type` | Model type (vit_b/vpt_vit_b) |
+| `--checkpoint` | Path to pre-trained model |
+| `--attribute_name` | Sensitive attribute name |
+| `--num_sensitive_classes` | Number of sensitive attribute categories |
+| `--num_epochs` | Number of training epochs |
+| `--batch_size` | Batch size |
+| `--alpha` | Weight for sensitive attribute prediction loss |
+| `--beta` | Weight for entropy loss |
 
-Install `PyQt5` with [pip](https://pypi.org/project/PyQt5/): `pip install PyQt5 ` or [conda](https://anaconda.org/anaconda/pyqt): `conda install -c anaconda pyqt`
+## Result Visualization
 
-```bash
-python gui.py
-```
-
-Load the image to the GUI and specify segmentation targets by drawing bounding boxes.
-
-
-
-https://github.com/bowang-lab/MedSAM/assets/19947331/a8d94b4d-0221-4d09-a43a-1251842487ee
-
-
-
-
-
-## Model Training
-
-### Data preprocessing
-
-Download [SAM checkpoint](https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth) and place it at `work_dir/SAM/sam_vit_b_01ec64.pth` .
-
-Download the demo [dataset](https://zenodo.org/record/7860267) and unzip it to `data/FLARE22Train/`.
-
-This dataset contains 50 abdomen CT scans and each scan contains an annotation mask with 13 organs. The names of the organ label are available at [MICCAI FLARE2022](https://flare22.grand-challenge.org/).
-
-Run pre-processing
-
-Install `cc3d`: `pip install connected-components-3d`
-
-```bash
-python pre_CT_MR.py
-```
-
-- split dataset: 80% for training and 20% for testing
-- adjust CT scans to [soft tissue](https://radiopaedia.org/articles/windowing-ct) window level (40) and width (400)
-- max-min normalization
-- resample image size to `1024x1024`
-- save the pre-processed images and labels as `npy` files
-
-
-### Training on multiple GPUs (Recommend)
-
-The model was trained on five A100 nodes and each node has four GPUs (80G) (20 A100 GPUs in total). Please use the slurm script to start the training process.
-
-```bash
-sbatch train_multi_gpus.sh
-```
-
-When the training process is done, please convert the checkpoint to SAM's format for convenient inference.
-
-```bash
-python utils/ckpt_convert.py # Please set the corresponding checkpoint path first
-```
-
-### Training on one GPU
-
-```bash
-python train_one_gpu.py
-```
-
-
-
-## Acknowledgements
-- We highly appreciate all the challenge organizers and dataset owners for providing the public dataset to the community.
-- We thank Meta AI for making the source code of [segment anything](https://github.com/facebookresearch/segment-anything) publicly available.
-- We also thank Alexandre Bonnet for sharing this great [blog](https://encord.com/blog/learn-how-to-fine-tune-the-segment-anything-model-sam/)
-
-
-## Reference
-
-```
-@article{MedSAM,
-  title={Segment Anything in Medical Images},
-  author={Ma, Jun and He, Yuting and Li, Feifei and Han, Lin and You, Chenyu and Wang, Bo},
-  journal={Nature Communications},
-  volume={15},
-  pages={654},
-  year={2024}
-}
-```
+Loss curves and evaluation metrics during training are automatically saved in the `work_dir/` directory.
